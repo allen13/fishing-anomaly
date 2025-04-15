@@ -113,17 +113,6 @@ aggregated_df = df.groupBy("mmsi", "date_float_ts").agg(
     max("lon").alias("max_lon")
 )
 
-# Remove the area covered calculation if it relied on the old aggregation
-# Or adjust if necessary, though area per day might not be the goal
-# logger.info("Calculating area coverage metrics")
-# aggregated_df = aggregated_df.withColumn(
-#     "lat_range", col("max_lat") - col("min_lat")
-# ).withColumn(
-#     "lon_range", col("max_lon") - col("min_lon")
-# ).withColumn(
-#     "area_covered", col("lat_range") * col("lon_range")
-# )
-
 vessel_day_count = aggregated_df.count()
 logger.info(f"After aggregation: {vessel_day_count} unique vessel-day records")
 
