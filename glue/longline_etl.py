@@ -6,7 +6,8 @@ from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
-from pyspark.sql.functions import col, min, max, mean, stddev, count, to_date
+from pyspark.sql.functions import col, min, max, mean, stddev, count, to_date, date_format, unix_timestamp
+from pyspark.sql.types import FloatType
 import logging
 
 # Set up logging for AWS Glue environment
@@ -65,17 +66,22 @@ if 'source' in df.columns:
     logger.info("Dropping 'source' column")
     df = df.drop('source')
 
-# Extract date from timestamp
-logger.info("Extracting date from timestamp")
-df = df.withColumn("date", to_date(col("timestamp")))
+# Convert timestamp to float Unix timestamp (seconds since epoch at start of day)
+logger.info("Extracting date and converting to float Unix timestamp representation")
+df = df.withColumn(
+    "date_float_ts",
+    unix_timestamp(
+        to_date(col("timestamp").cast("timestamp")).cast("timestamp")
+    ).cast(FloatType())
+)
 
-# Perform aggregation by mmsi and date
-logger.info("Starting aggregation by vessel MMSI and date")
-aggregated_df = df.groupBy("mmsi", "date").agg(
+# Perform aggregation by mmsi and date_float_ts
+logger.info("Starting aggregation by vessel MMSI and date float timestamp")
+aggregated_df = df.groupBy("mmsi", "date_float_ts").agg(
     # Time-based metrics
-    min("timestamp").alias("first_timestamp"),
-    max("timestamp").alias("last_timestamp"),
-    (max("timestamp") - min("timestamp")).alias("time_span"),
+    min("timestamp").alias("first_timestamp_of_day"), # Renamed for clarity
+    max("timestamp").alias("last_timestamp_of_day"),  # Renamed for clarity
+    (max("timestamp") - min("timestamp")).alias("time_span_seconds_in_day"), # Calculation is now within the day
     
     # Count of positions
     count("mmsi").alias("position_count"),
@@ -89,7 +95,7 @@ aggregated_df = df.groupBy("mmsi", "date").agg(
     # Course statistics
     mean("course").alias("avg_course"),
     stddev("course").alias("course_std"),
-    (max("course") - min("course")).alias("course_range"),
+    (max("course") - min("course")).alias("course_range"), # This might be less meaningful per day
     
     # Distance metrics
     mean("distance_from_shore").alias("avg_distance_from_shore"),
@@ -98,7 +104,7 @@ aggregated_df = df.groupBy("mmsi", "date").agg(
     # Fishing activity (if available)
     mean("is_fishing").alias("avg_fishing_indicator"),
     
-    # Position statistics
+    # Position statistics (aggregation over the day)
     mean("lat").alias("avg_lat"),
     mean("lon").alias("avg_lon"),
     min("lat").alias("min_lat"),
@@ -107,15 +113,16 @@ aggregated_df = df.groupBy("mmsi", "date").agg(
     max("lon").alias("max_lon")
 )
 
-# Calculate area covered
-logger.info("Calculating area coverage metrics")
-aggregated_df = aggregated_df.withColumn(
-    "lat_range", col("max_lat") - col("min_lat")
-).withColumn(
-    "lon_range", col("max_lon") - col("min_lon")
-).withColumn(
-    "area_covered", col("lat_range") * col("lon_range")
-)
+# Remove the area covered calculation if it relied on the old aggregation
+# Or adjust if necessary, though area per day might not be the goal
+# logger.info("Calculating area coverage metrics")
+# aggregated_df = aggregated_df.withColumn(
+#     "lat_range", col("max_lat") - col("min_lat")
+# ).withColumn(
+#     "lon_range", col("max_lon") - col("min_lon")
+# ).withColumn(
+#     "area_covered", col("lat_range") * col("lon_range")
+# )
 
 vessel_day_count = aggregated_df.count()
 logger.info(f"After aggregation: {vessel_day_count} unique vessel-day records")
