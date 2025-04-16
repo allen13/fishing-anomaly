@@ -63,8 +63,8 @@ resource "aws_sagemaker_notebook_instance" "fishing_notebook" {
 resource "aws_sagemaker_notebook_instance_lifecycle_configuration" "fishing_notebook_config" {
   name = "fishing-notebook-config"
 
-  on_create = base64encode(file("${path.module}/scripts/on_create.sh"))
-  on_start = base64encode(file("${path.module}/scripts/on_start.sh"))
+  on_create = base64encode(file("../sagemaker/on_create.sh"))
+  on_start = base64encode(file("../sagemaker/on_start.sh"))
 
   # Reference to ensure that any files to be included actually exist
   depends_on = []
@@ -74,8 +74,8 @@ resource "aws_sagemaker_notebook_instance_lifecycle_configuration" "fishing_note
 resource "aws_s3_object" "sagemaker_train_script" {
   bucket = var.bucket_name
   key    = "scripts/sagemaker_train.py"
-  source = "${path.module}/scripts/sagemaker_train.py"
-  etag   = filemd5("${path.module}/scripts/sagemaker_train.py")
+  source = "../sagemaker/sagemaker_train.py"
+  etag   = filemd5("../sagemaker/sagemaker_train.py")
 }
 
 # Attach the lifecycle configuration to the notebook instance
